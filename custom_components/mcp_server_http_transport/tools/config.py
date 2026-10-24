@@ -13,6 +13,8 @@ from . import (
     dumps,
     register_tool,
 )
+from .categories import CATEGORY_PROPERTY, async_category_suffix
+from .icons import ICON_PROPERTY, async_icon_suffix
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,7 +33,9 @@ _LOGGER = logging.getLogger(__name__)
                 "description": (
                     "Automation configuration (alias, trigger, action, condition, mode, etc.)"
                 ),
-            }
+            },
+            "category": CATEGORY_PROPERTY,
+            "icon": ICON_PROPERTY,
         },
         "required": ["config"],
     },
@@ -45,9 +49,14 @@ async def create_automation(hass: HomeAssistant, arguments: dict[str, Any]) -> d
         entry_id = await create_list_entry(
             hass, "automations.yaml", arguments["config"], "automation"
         )
+        suffix = await async_category_suffix(hass, arguments, "automation", "automation", entry_id)
+        suffix += await async_icon_suffix(hass, arguments, "automation", "automation", entry_id)
         return {
             "content": [
-                {"type": "text", "text": f"Successfully created automation with id: {entry_id}"}
+                {
+                    "type": "text",
+                    "text": f"Successfully created automation with id: {entry_id}{suffix}",
+                }
             ]
         }
     except Exception as e:
@@ -69,6 +78,7 @@ async def create_automation(hass: HomeAssistant, arguments: dict[str, Any]) -> d
                 "description": "Updated automation config"
                 " (alias, trigger, action, condition, mode, etc.)",
             },
+            "icon": ICON_PROPERTY,
         },
         "required": ["automation_id", "config"],
     },
@@ -86,7 +96,10 @@ async def update_automation(hass: HomeAssistant, arguments: dict[str, Any]) -> d
             arguments["config"],
             "automation",
         )
-        return {"content": [{"type": "text", "text": "Successfully updated automation"}]}
+        suffix = await async_icon_suffix(
+            hass, arguments, "automation", "automation", arguments["automation_id"]
+        )
+        return {"content": [{"type": "text", "text": f"Successfully updated automation{suffix}"}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": f"Error updating automation: {str(e)}"}]}
 
@@ -175,7 +188,9 @@ async def get_automation_config(hass: HomeAssistant, arguments: dict[str, Any]) 
             "config": {
                 "type": "object",
                 "description": "Scene configuration (name, entities, etc.)",
-            }
+            },
+            "category": CATEGORY_PROPERTY,
+            "icon": ICON_PROPERTY,
         },
         "required": ["config"],
     },
@@ -187,8 +202,13 @@ async def create_scene(hass: HomeAssistant, arguments: dict[str, Any]) -> dict[s
 
     try:
         entry_id = await create_list_entry(hass, "scenes.yaml", arguments["config"], "scene")
+        # Scenes from scenes.yaml belong to the "homeassistant" scene platform.
+        suffix = await async_category_suffix(hass, arguments, "scene", "homeassistant", entry_id)
+        suffix += await async_icon_suffix(hass, arguments, "scene", "homeassistant", entry_id)
         return {
-            "content": [{"type": "text", "text": f"Successfully created scene with id: {entry_id}"}]
+            "content": [
+                {"type": "text", "text": f"Successfully created scene with id: {entry_id}{suffix}"}
+            ]
         }
     except Exception as e:
         return {"content": [{"type": "text", "text": f"Error creating scene: {str(e)}"}]}
@@ -208,6 +228,7 @@ async def create_scene(hass: HomeAssistant, arguments: dict[str, Any]) -> dict[s
                 "type": "object",
                 "description": "Updated scene configuration (name, entities, etc.)",
             },
+            "icon": ICON_PROPERTY,
         },
         "required": ["scene_id", "config"],
     },
@@ -221,7 +242,10 @@ async def update_scene(hass: HomeAssistant, arguments: dict[str, Any]) -> dict[s
         await update_list_entry(
             hass, "scenes.yaml", arguments["scene_id"], arguments["config"], "scene"
         )
-        return {"content": [{"type": "text", "text": "Successfully updated scene"}]}
+        suffix = await async_icon_suffix(
+            hass, arguments, "scene", "homeassistant", arguments["scene_id"]
+        )
+        return {"content": [{"type": "text", "text": f"Successfully updated scene{suffix}"}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": f"Error updating scene: {str(e)}"}]}
 
@@ -315,6 +339,8 @@ async def get_scene_config(hass: HomeAssistant, arguments: dict[str, Any]) -> di
                 "type": "object",
                 "description": "Script configuration (alias, sequence, mode, etc.)",
             },
+            "category": CATEGORY_PROPERTY,
+            "icon": ICON_PROPERTY,
         },
         "required": ["key", "config"],
     },
@@ -328,8 +354,12 @@ async def create_script(hass: HomeAssistant, arguments: dict[str, Any]) -> dict[
         key = await create_dict_entry(
             hass, "scripts.yaml", arguments["key"], arguments["config"], "script"
         )
+        suffix = await async_category_suffix(hass, arguments, "script", "script", key)
+        suffix += await async_icon_suffix(hass, arguments, "script", "script", key)
         return {
-            "content": [{"type": "text", "text": f"Successfully created script with key: {key}"}]
+            "content": [
+                {"type": "text", "text": f"Successfully created script with key: {key}{suffix}"}
+            ]
         }
     except Exception as e:
         return {"content": [{"type": "text", "text": f"Error creating script: {str(e)}"}]}
@@ -349,6 +379,7 @@ async def create_script(hass: HomeAssistant, arguments: dict[str, Any]) -> dict[
                 "type": "object",
                 "description": "Updated script configuration (alias, sequence, mode, etc.)",
             },
+            "icon": ICON_PROPERTY,
         },
         "required": ["key", "config"],
     },
@@ -362,7 +393,8 @@ async def update_script(hass: HomeAssistant, arguments: dict[str, Any]) -> dict[
         await update_dict_entry(
             hass, "scripts.yaml", arguments["key"], arguments["config"], "script"
         )
-        return {"content": [{"type": "text", "text": "Successfully updated script"}]}
+        suffix = await async_icon_suffix(hass, arguments, "script", "script", arguments["key"])
+        return {"content": [{"type": "text", "text": f"Successfully updated script{suffix}"}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": f"Error updating script: {str(e)}"}]}
 

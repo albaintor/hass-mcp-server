@@ -21,6 +21,7 @@ from aiohttp import web
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.components.calendar.const import DATA_COMPONENT, LIST_EVENT_FIELDS
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http.ban import process_success_login, process_wrong_login
 from homeassistant.components.recorder import Recorder
 from homeassistant.components.recorder.history import (
     get_significant_states,
@@ -34,9 +35,12 @@ from homeassistant.components.recorder.statistics import (
     list_statistic_ids,
     validate_statistics,
 )
+from homeassistant.helpers.category_registry import CategoryEntry, CategoryRegistry
 from homeassistant.helpers.entity_component import EntityComponent
+from homeassistant.helpers.entity_registry import EntityRegistry, RegistryEntry
 from homeassistant.helpers.json import json_encoder_default
 from homeassistant.helpers.recorder import DATA_INSTANCE
+from homeassistant.loader import Integration, async_get_integration
 
 from custom_components.mcp_server_http_transport.const import MCP_PATH
 
@@ -214,6 +218,47 @@ class TestRecorderContracts:
 
     def test_async_clear_statistics_signature(self):
         assert _params(Recorder.async_clear_statistics) == ["self", "statistic_ids", "on_done"]
+
+
+class TestCategoryContracts:
+    """Contracts for tools/categories.py.
+
+    Categories have no service; the frontend sets them over the websocket API,
+    which writes the same registries these call. The entity registry keys an
+    entity's categories by scope ("automation", "script", "scene", "helpers"),
+    one category per scope.
+    """
+
+    def test_category_registry_lookup_and_create_signatures(self):
+        assert _params(CategoryRegistry.async_get_category) == ["self", "scope", "category_id"]
+        assert _params(CategoryRegistry.async_list_categories) == ["self", "scope"]
+        assert _params(CategoryRegistry.async_create) == ["self", "name", "scope", "icon"]
+
+    def test_category_entry_carries_the_listed_fields(self):
+        fields = {f.name for f in dataclasses.fields(CategoryEntry)}
+        assert {"category_id", "name", "icon"} <= fields
+
+    def test_entity_categories_are_a_scope_mapping_set_through_update_entity(self):
+        assert "categories" in _params(EntityRegistry.async_update_entity)
+        assert "categories" in {a.name for a in RegistryEntry.__attrs_attrs__}
+
+    def test_entity_icon_override_is_set_through_update_entity(self):
+        """tools/icons.py writes the icon override the entity settings dialog writes.
+
+        Automations have no icon in their config, so this field is the only place
+        the create and update tools can put one.
+        """
+        assert "icon" in _params(EntityRegistry.async_update_entity)
+        assert "icon" in {a.name for a in RegistryEntry.__attrs_attrs__}
+
+    def test_helpers_are_recognized_by_their_integration_type(self):
+        """A helper is put in the "helpers" scope because its integration is a helper.
+
+        That covers config entry helpers such as template sensors, whose entity
+        domain says nothing about being a helper.
+        """
+        assert _params(async_get_integration) == ["hass", "domain"]
+        assert "integration_type" in dir(Integration)
 
 
 class TestHistoryContracts:
@@ -414,3 +459,32 @@ class TestJsonEncoderDefaultContract:
         # not some other exception, for a value it does not know.
         with pytest.raises(TypeError):
             json_encoder_default(object())
+
+
+class TestProcessWrongLoginContract:
+    """``process_wrong_login`` is how a failed bearer token reaches Home Assistant's
+    login attempt counter and IP ban (#107).
+
+    The view validates tokens itself, so Home Assistant's own auth middleware never
+    sees a rejection there. The public alternative is the ``ip_bans.yaml`` file and
+    the ban manager's own methods, which carry no counter or threshold. Were this
+    to break, check the new signature and what it reads off the request before
+    adapting ``MCPEndpointView._record_failed_login``.
+    """
+
+    def test_is_a_coroutine_taking_only_the_request(self):
+        assert inspect.iscoroutinefunction(process_wrong_login)
+        assert _params(process_wrong_login) == ["request"]
+
+
+class TestProcessSuccessLoginContract:
+    """``process_success_login`` clears an address's failed login count (#107).
+
+    The view calls it after every authorized request, since Home Assistant only
+    calls it from the login flow and the websocket handler, never for a bearer
+    request. It is synchronous, unlike ``process_wrong_login``.
+    """
+
+    def test_is_a_plain_function_taking_only_the_request(self):
+        assert not inspect.iscoroutinefunction(process_success_login)
+        assert _params(process_success_login) == ["request"]
